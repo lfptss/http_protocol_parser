@@ -1,0 +1,55 @@
+ltm rule /Common/testRule {
+when RULE_INIT priority 500 {
+        log local1. "iRule: testRule init!"
+    }
+
+
+    when CLIENT_DATA priority 500 {
+
+        # create data group "http_profile_testDG" Type:"String"
+        # insert String Record : "Insert_X-Forwarded-For :=1"
+
+        #--------------------Insert X-Forwarded-For-------------------------------
+
+        if { [class match -value -- "Insert_X-Forwarded-For" equals http_profile_testDG] } {
+
+            set client_ip_addr [IP::client_addr]
+            set property "X-Forwarded-For: $client_ip_addr"
+            set insert_property "X-Forwarded-For: $client_ip_addr\r\n"
+            set property_length [string bytelength $insert_property]
+            if { !$isBodyExist } {
+                set write_pointer [expr {[lindex [lindex $FIELD_OFFSET_LIST end] 2] + [lindex [lindex $FIELD_OFFSET_LIST end] 4] + 2}]
+                TCP::payload replace $write_pointer 0 $insert_property
+                lappend REQUEST_HEADER $property
+                lappend HEADER_MAP("X-Forwarded-For") $client_ip_addr
+                lappend FIELD_OFFSET_LIST [ list "X-Forwarded-For" , $write_pointer , [expr {$property_length - 2}] ]
+            } else {
+                set write_pointer [expr {[lindex [lindex $FIELD_OFFSET_LIST end-1] 2] + [lindex [lindex $FIELD_OFFSET_LIST end-1] 4] + 2}]
+                TCP::payload replace $write_pointer 0 $insert_property
+                lappend REQUEST_HEADER $property
+                lappend HEADER_MAP("X-Forwarded-For") $client_ip_addr
+                set FIELD_OFFSET_LIST [linsert $FIELD_OFFSET_LIST end-1 [ list "X-Forwarded-For" , $write_pointer , [expr {$property_length - 2}] ]]
+                lset FIELD_OFFSET_LIST end 2 [expr {[lindex [lindex $FIELD_OFFSET_LIST end] 2] + $property_length}]
+            }
+            incr offset_pointer $property_length
+            #log local1. "write_pointer : $write_pointer"
+            #log local1. "$REQUEST_HEADER"
+            #log local1. "$HEADER_MAP("X-Forwarded-For")"
+            log local1. "$FIELD_OFFSET_LIST"
+            log local1. "$offset_pointer"
+
+        }
+
+        #-------------------------------------------------------------------------
+        #TCP::payload replace 0 3 "POST"
+
+        #TCP::payload replace 4 1 ""
+
+
+        #set length [ expr {[TCP::payload length]} ]
+        #log local1. "$length"
+
+
+
+    }
+}

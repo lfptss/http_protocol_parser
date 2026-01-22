@@ -1,0 +1,125 @@
+ltm rule /Common/http_profile_test {
+when RULE_INIT priority 100 {
+        log local1. "iRule: http_profile_test init!"    
+    }
+
+    when CLIENT_ACCEPTED priority 100 {
+
+        set REQUEST_LINE        ""
+        set REQUEST_HEADER      [list]
+        set REQUEST_BODY        ""
+
+        set HTTP_METHOD         ""     
+        set URI                 ""
+        set Protocol            ""
+
+        array set HEADER_MAP    {}
+        set FIELD_OFFSET_LIST   [list]
+
+        TCP::collect
+    }
+
+    when CLIENT_DATA priority 100 {
+
+        # get TCP payload
+        set payload [TCP::payload]
+
+        # init offset pointer and flags, after parsing, the value of offset_pointer is the number of bytes in the entire data.
+        set offset_pointer 0
+        set write_pointer 0
+        set isBodyExist 1
+
+        # payload formatting and determine whether http body exists
+        regsub -- "\r\n\r\n" $payload "\x01" context
+        set parts [split $context "\x01"]
+
+        #if {[expr {[lindex $parts end] eq ""}]} {
+         #   set isBodyExist 0
+        #}
+        set isBodyExist [expr {[lindex $parts end] ne ""}]
+
+        regsub -all -- "\r\n" [lindex $parts 0] "\n" text
+        set req_lines [split $text "\n"]
+        set req_lines [lsearch -all -inline -not $req_lines ""]
+
+        # -------------------get and parse request line---------------------------
+
+        set REQUEST_LINE [lindex $req_lines 0]
+
+        # parse http method
+        set HTTP_METHOD [lindex [split $REQUEST_LINE " "] 0]
+        lappend FIELD_OFFSET_LIST [ list "method" , $offset_pointer , [string bytelength $HTTP_METHOD] ]
+        incr offset_pointer [ expr { [string bytelength $HTTP_METHOD] + 1 }]
+
+        # parse uri
+        set URI [lindex [split $REQUEST_LINE " "] 1]
+        lappend FIELD_OFFSET_LIST [ list "uri" , $offset_pointer , [string bytelength $URI] ]
+        incr offset_pointer [ expr { [string bytelength $URI] + 1 }]
+
+        # parse protocol
+        if {[catch {set Protocol [lindex [split $REQUEST_LINE " "] 2]}]} {
+            log local1.warning "HTTP Protocol field misses ,recognized as HTTP/0.9"
+            set Protocol "HTTP/0.9"
+            incr $offset_pointer 2
+        }
+        if { $Protocol ne "HTTP/0.9" } {
+            lappend FIELD_OFFSET_LIST [ list "protocol" , $offset_pointer , [string bytelength $Protocol] ]
+            incr offset_pointer [ expr { [string bytelength $Protocol] + 2 }]
+        }
+
+        #-------------------------------------------------------------------------
+
+        # -------------------get and parse request header-------------------------
+
+        # get request header
+        for {set i 1} {$i < [expr {[llength $req_lines]}] } {incr i} {
+            #log local1. "[lindex $req_lines $i]"
+            lappend REQUEST_HEADER [lindex $req_lines $i]
+        }
+
+        # parse request header
+        foreach curr_header $REQUEST_HEADER {
+            regsub -all -- ": " $curr_header "\x01" tmp_header
+            set tmp_header [split $tmp_header "\x01"]
+            lappend HEADER_MAP([lindex $tmp_header 0]) [lindex $tmp_header 1]
+            #log local1. "[lindex $tmp_header 0]: [lindex $tmp_header 1]"
+            lappend FIELD_OFFSET_LIST [ list "[lindex $tmp_header 0]" , $offset_pointer , [string bytelength $curr_header] ]
+            incr offset_pointer [ expr { [string bytelength $curr_header] + 2 }]
+            #log local1. "offset : $offset_pointer"
+        }
+
+        #array set HEADER_MAP [array get header]
+
+        #-------------------------------------------------------------------------
+
+        # -------------------get and parse request body---------------------------
+
+        if { $isBodyExist } {
+            set REQUEST_BODY [lindex $parts end]
+            incr offset_pointer 2
+            lappend FIELD_OFFSET_LIST [ list "request_body" , $offset_pointer , [string bytelength $REQUEST_BODY] ]
+            incr offset_pointer [ expr { [string bytelength $REQUEST_BODY] }]
+        } else { incr offset_pointer 2 }
+
+        #log local1. "offset : $offset_pointer"
+        #log local1. "$FIELD_OFFSET_LIST"
+
+        #-------------------------------------------------------------------------
+
+        #log local1. "[array get HEADER_MAP]"
+
+
+        #log local1. "method: $HTTP_METHOD"
+        #log local1. "uri: $URI"
+        #log local1. "protocol: $Protocol"
+        #log local1. "header: $REQUEST_HEADER"
+        #log local1. "body: $REQUEST_BODY"  
+        #log local1. "$REQUEST_LINE"
+
+
+
+        #TCP::release
+        #TCP::collect  
+
+    }
+}
