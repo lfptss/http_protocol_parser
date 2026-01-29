@@ -1,0 +1,25 @@
+ltm rule /Common/tcp_release_serverside {
+    when RULE_INIT priority 900 {
+        log local1. "iRule: tcp_release_serverside init!"
+    }
+
+    when SERVER_DATA priority 900 {
+
+        TCP::release
+
+        # refresh variables
+        set STATUS_LINE             ""
+        set RESPONSE_HEADER         [list]
+        set RESPONSE_BODY           ""
+
+        set SERVER_VERSION          ""     
+        set STATUS_CODE             ""
+        set REASON_PHRASE           ""
+
+        array set RESP_HEADER_MAP   {}
+        set RESP_FIELD_OFFSET_LIST  [list]
+
+        TCP::collect
+
+    }
+}

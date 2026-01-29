@@ -1,5 +1,5 @@
 ltm rule /Common/testRule {
-when RULE_INIT priority 500 {
+    when RULE_INIT priority 500 {
         log local1. "iRule: testRule init!"
     }
 
@@ -14,29 +14,29 @@ when RULE_INIT priority 500 {
         if { [class match -value -- "Insert_X-Forwarded-For" equals http_profile_testDG] } {
 
             set client_ip_addr [IP::client_addr]
-            set property "X-Forwarded-For: $client_ip_addr"
-            set insert_property "X-Forwarded-For: $client_ip_addr\r\n"
-            set property_length [string bytelength $insert_property]
-            if { !$isBodyExist } {
-                set write_pointer [expr {[lindex [lindex $FIELD_OFFSET_LIST end] 2] + [lindex [lindex $FIELD_OFFSET_LIST end] 4] + 2}]
-                TCP::payload replace $write_pointer 0 $insert_property
-                lappend REQUEST_HEADER $property
-                lappend HEADER_MAP("X-Forwarded-For") $client_ip_addr
-                lappend FIELD_OFFSET_LIST [ list "X-Forwarded-For" , $write_pointer , [expr {$property_length - 2}] ]
+            set xff_property "X-Forwarded-For: $client_ip_addr"
+            set insert_xff_property "X-Forwarded-For: $client_ip_addr\r\n"
+            set xff_property_length [string bytelength $insert_xff_property]
+            if { !$isReqBodyExist } {
+                set req_write_pointer [expr {[lindex [lindex $REQ_FIELD_OFFSET_LIST end] 2] + [lindex [lindex $REQ_FIELD_OFFSET_LIST end] 4] + 2}]
+                TCP::payload replace $req_write_pointer 0 $insert_xff_property
+                lappend REQUEST_HEADER $xff_property
+                lappend REQ_HEADER_MAP("X-Forwarded-For") $client_ip_addr
+                lappend REQ_FIELD_OFFSET_LIST [ list "X-Forwarded-For" , $req_write_pointer , [expr {$xff_property_length - 2}] ]
             } else {
-                set write_pointer [expr {[lindex [lindex $FIELD_OFFSET_LIST end-1] 2] + [lindex [lindex $FIELD_OFFSET_LIST end-1] 4] + 2}]
-                TCP::payload replace $write_pointer 0 $insert_property
-                lappend REQUEST_HEADER $property
-                lappend HEADER_MAP("X-Forwarded-For") $client_ip_addr
-                set FIELD_OFFSET_LIST [linsert $FIELD_OFFSET_LIST end-1 [ list "X-Forwarded-For" , $write_pointer , [expr {$property_length - 2}] ]]
-                lset FIELD_OFFSET_LIST end 2 [expr {[lindex [lindex $FIELD_OFFSET_LIST end] 2] + $property_length}]
+                set req_write_pointer [expr {[lindex [lindex $REQ_FIELD_OFFSET_LIST end-1] 2] + [lindex [lindex $REQ_FIELD_OFFSET_LIST end-1] 4] + 2}]
+                TCP::payload replace $req_write_pointer 0 $insert_xff_property
+                lappend REQUEST_HEADER $xff_property
+                lappend REQ_HEADER_MAP("X-Forwarded-For") $client_ip_addr
+                set REQ_FIELD_OFFSET_LIST [linsert $REQ_FIELD_OFFSET_LIST end-1 [ list "X-Forwarded-For" , $req_write_pointer , [expr {$xff_property_length - 2}] ]]
+                lset REQ_FIELD_OFFSET_LIST end 2 [expr {[lindex [lindex $REQ_FIELD_OFFSET_LIST end] 2] + $xff_property_length}]
             }
-            incr offset_pointer $property_length
+            incr req_offset_pointer $xff_property_length
             #log local1. "write_pointer : $write_pointer"
             #log local1. "$REQUEST_HEADER"
             #log local1. "$HEADER_MAP("X-Forwarded-For")"
-            log local1. "$FIELD_OFFSET_LIST"
-            log local1. "$offset_pointer"
+            #log local1. "$REQ_FIELD_OFFSET_LIST"
+            #log local1. "$req_offset_pointer"
 
         }
 

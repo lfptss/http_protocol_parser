@@ -1,0 +1,123 @@
+ltm rule http_parser_serverside {
+    when RULE_INIT priority 100 {
+        log local1. "iRule: http_parser_serverside init!"
+    }
+
+    when SERVER_CONNECTED priority 100 {
+        
+        set STATUS_LINE             ""
+        set RESPONSE_HEADER         [list]
+        set RESPONSE_BODY           ""
+
+        set SERVER_VERSION          ""     
+        set STATUS_CODE             ""
+        set REASON_PHRASE           ""
+
+        array set RESP_HEADER_MAP   {}
+        set RESP_FIELD_OFFSET_LIST  [list]
+
+        TCP::collect
+
+    }
+
+    when SERVER_DATA priority 100 {
+    
+        # get TCP payload
+        set resp_payload [TCP::payload]
+
+        # init offset pointer and flags, after parsing, the value of reps_offset_pointer is the number of bytes in the entire data.
+        set resp_offset_pointer 0
+        set resp_write_pointer 0
+        set isRespBodyExist 1
+
+        # payload formatting and determine whether response body exists
+        regsub -- "\r\n\r\n" $resp_payload "\x01" resp_context
+        set resp_parts [split $resp_context "\x01"]
+        
+        set isRespBodyExist [expr {[lindex $resp_parts end] ne ""}]
+
+        regsub -all -- "\r\n" [lindex $resp_parts 0] "\n" resp_text
+        set resp_lines [split $resp_text "\n"]
+        set resp_lines [lsearch -all -inline -not $resp_lines ""]
+
+        # -------------------get and parse status line----------------------------
+
+        set STATUS_LINE [lindex $resp_lines 0]
+        regsub -- " " $STATUS_LINE "\x01" tmp_status_line
+        regsub -- " " $tmp_status_line "\x01" tmp_status_line
+
+        # parse server http version
+        set SERVER_VERSION [lindex [split $tmp_status_line "\x01"] 0]
+        lappend RESP_FIELD_OFFSET_LIST [ list "server_version" , $resp_offset_pointer , [string bytelength $SERVER_VERSION] ]
+        incr resp_offset_pointer [ expr { [string bytelength $SERVER_VERSION] + 1 }]
+
+        # parse status code
+        set STATUS_CODE [lindex [split $tmp_status_line "\x01"] 1]
+        lappend RESP_FIELD_OFFSET_LIST [ list "status_code" , $resp_offset_pointer , [string bytelength $STATUS_CODE] ]
+        incr resp_offset_pointer [ expr { [string bytelength $STATUS_CODE] + 1 }]
+
+        # parse reason phrase
+        set REASON_PHRASE [lindex [split $tmp_status_line "\x01"] 2]
+        lappend RESP_FIELD_OFFSET_LIST [ list "reason_phrase" , $resp_offset_pointer , [string bytelength $REASON_PHRASE] ]
+        incr resp_offset_pointer [ expr { [string bytelength $REASON_PHRASE] + 2 }]
+
+        #-------------------------------------------------------------------------
+
+        # -------------------get and parse response header-------------------------
+
+        # get response header
+        for {set i 1} {$i < [expr {[llength $resp_lines]}] } {incr i} {
+            #log local1. "[lindex $resp_lines $i]"
+            lappend RESPONSE_HEADER [lindex $resp_lines $i]
+        }
+
+        # parse response header
+        foreach curr_respHeader $RESPONSE_HEADER {
+            regsub -all -- ": " $curr_respHeader "\x01" tmp_respHeader
+            set tmp_respHeader [split $tmp_respHeader "\x01"]
+            lappend RESP_HEADER_MAP([lindex $tmp_respHeader 0]) [lindex $tmp_respHeader 1]
+            #log local1. "[lindex $tmp_respHeader 0]: [lindex $tmp_respHeader 1]"
+            lappend RESP_FIELD_OFFSET_LIST [ list "[lindex $tmp_respHeader 0]" , $resp_offset_pointer , [string bytelength $curr_respHeader] ]
+            incr resp_offset_pointer [ expr { [string bytelength $curr_respHeader] + 2 }]
+            #log local1. "offset : $resp_offset_pointer"
+        }
+
+        #-------------------------------------------------------------------------
+
+        # -------------------get and parse response body---------------------------
+
+        if { $isRespBodyExist } {
+            incr resp_offset_pointer 2
+            set ce "Content-Encoding"
+            # check if field "Content-Encoding" exists
+            if {[info exists RESP_HEADER_MAP($ce)]} {
+                # if "Content-Encoding" exists, store response body as raw hex data
+                binary scan $resp_payload @${resp_offset_pointer}H* RESPONSE_BODY
+                # real response body length is half of the string bytelength
+                set real_respBody_length [expr {[string bytelength $RESPONSE_BODY] / 2}]
+                lappend RESP_FIELD_OFFSET_LIST [ list "response_body" , $resp_offset_pointer , $real_respBody_length ]
+                incr resp_offset_pointer $real_respBody_length
+            } else {
+                set RESPONSE_BODY [lindex $resp_parts end]
+                lappend RESP_FIELD_OFFSET_LIST [ list "response_body" , $resp_offset_pointer , [string bytelength $RESPONSE_BODY] ]
+                incr resp_offset_pointer [string bytelength $RESPONSE_BODY]
+            }
+        } else { incr resp_offset_pointer 2 }
+
+        #-------------------------------------------------------------------------
+
+        #log local1. "status line: $STATUS_LINE"
+        #log local1. "version: $SERVER_VERSION"
+        #log local1. "status code: $STATUS_CODE"
+        #log local1. "phrase: $REASON_PHRASE"
+        #log local1. "[array get RESP_HEADER_MAP]"
+        
+        #log local1. "$isRespBodyExist"
+        #log local1. "$RESPONSE_BODY"
+        log local1. "$RESP_FIELD_OFFSET_LIST"
+        log local1. "$resp_offset_pointer"
+        
+    }
+
+
+}

@@ -1,0 +1,125 @@
+ltm rule /Common/http_parser_clientside {
+    when RULE_INIT priority 100 {
+        log local1. "iRule: http_parser_clientside init!"    
+    }
+
+    when CLIENT_ACCEPTED priority 100 {
+
+        set REQUEST_LINE            ""
+        set REQUEST_HEADER          [list]
+        set REQUEST_BODY            ""
+
+        set HTTP_METHOD             ""     
+        set URI                     ""
+        set CLIENT_VERSION          ""
+
+        array set REQ_HEADER_MAP    {}
+        set REQ_FIELD_OFFSET_LIST   [list]
+
+        TCP::collect
+    }
+
+    when CLIENT_DATA priority 100 {
+
+        # get TCP payload
+        set req_payload [TCP::payload]
+
+        # init offset pointer and flags, after parsing, the value of req_offset_pointer is the number of bytes in the entire data.
+        set req_offset_pointer 0
+        set req_write_pointer 0
+        set isReqBodyExist 1
+
+        # payload formatting and determine whether http body exists
+        regsub -- "\r\n\r\n" $req_payload "\x01" req_context
+        set req_parts [split $req_context "\x01"]
+
+        #if {[expr {[lindex $parts end] eq ""}]} {
+         #   set isBodyExist 0
+        #}
+        set isReqBodyExist [expr {[lindex $req_parts end] ne ""}]
+
+        regsub -all -- "\r\n" [lindex $req_parts 0] "\n" req_text
+        set req_lines [split $req_text "\n"]
+        set req_lines [lsearch -all -inline -not $req_lines ""]
+
+        # -------------------get and parse request line---------------------------
+
+        set REQUEST_LINE [lindex $req_lines 0]
+
+        # parse http method
+        set HTTP_METHOD [lindex [split $REQUEST_LINE " "] 0]
+        lappend REQ_FIELD_OFFSET_LIST [ list "method" , $req_offset_pointer , [string bytelength $HTTP_METHOD] ]
+        incr req_offset_pointer [ expr { [string bytelength $HTTP_METHOD] + 1 }]
+
+        # parse uri
+        set URI [lindex [split $REQUEST_LINE " "] 1]
+        lappend REQ_FIELD_OFFSET_LIST [ list "uri" , $req_offset_pointer , [string bytelength $URI] ]
+        incr req_offset_pointer [ expr { [string bytelength $URI] + 1 }]
+
+        # parse client http version
+        if {[catch {set CLIENT_VERSION [lindex [split $REQUEST_LINE " "] 2]}]} {
+            log local1.warning "HTTP VERSION field misses ,recognized as HTTP/0.9"
+            set CLIENT_VERSION "HTTP/0.9"
+            incr $req_offset_pointer 2
+        }
+        if { $CLIENT_VERSION ne "HTTP/0.9" } {
+            lappend REQ_FIELD_OFFSET_LIST [ list "client_version" , $req_offset_pointer , [string bytelength $CLIENT_VERSION] ]
+            incr req_offset_pointer [ expr { [string bytelength $CLIENT_VERSION] + 2 }]
+        }
+
+        #-------------------------------------------------------------------------
+
+        # -------------------get and parse request header-------------------------
+
+        # get request header
+        for {set i 1} {$i < [expr {[llength $req_lines]}] } {incr i} {
+            #log local1. "[lindex $req_lines $i]"
+            lappend REQUEST_HEADER [lindex $req_lines $i]
+        }
+
+        # parse request header
+        foreach curr_reqHeader $REQUEST_HEADER {
+            regsub -all -- ": " $curr_reqHeader "\x01" tmp_reqHeader
+            set tmp_reqHeader [split $tmp_reqHeader "\x01"]
+            lappend REQ_HEADER_MAP([lindex $tmp_reqHeader 0]) [lindex $tmp_reqHeader 1]
+            #log local1. "[lindex $tmp_reqHeader 0]: [lindex $tmp_reqHeader 1]"
+            lappend REQ_FIELD_OFFSET_LIST [ list "[lindex $tmp_reqHeader 0]" , $req_offset_pointer , [string bytelength $curr_reqHeader] ]
+            incr req_offset_pointer [ expr { [string bytelength $curr_reqHeader] + 2 }]
+            #log local1. "offset : $req_offset_pointer"
+        }
+
+        #array set HEADER_MAP [array get header]
+
+        #-------------------------------------------------------------------------
+
+        # -------------------get and parse request body---------------------------
+
+        if { $isReqBodyExist } {
+            set REQUEST_BODY [lindex $req_parts end]
+            incr req_offset_pointer 2
+            lappend REQ_FIELD_OFFSET_LIST [ list "request_body" , $req_offset_pointer , [string bytelength $REQUEST_BODY] ]
+            incr req_offset_pointer [ expr { [string bytelength $REQUEST_BODY] }]
+        } else { incr req_offset_pointer 2 }
+
+        #log local1. "offset : $req_offset_pointer"
+        #log local1. "$FIELD_OFFSET_LIST"
+
+        #-------------------------------------------------------------------------
+
+        #log local1. "[array get HEADER_MAP]"
+
+
+        #log local1. "method: $HTTP_METHOD"
+        #log local1. "uri: $URI"
+        #log local1. "protocol: $Protocol"
+        #log local1. "header: $REQUEST_HEADER"
+        #log local1. "body: $REQUEST_BODY"  
+        #log local1. "$REQUEST_LINE"
+
+
+
+        #TCP::release
+        #TCP::collect  
+
+    }
+}
