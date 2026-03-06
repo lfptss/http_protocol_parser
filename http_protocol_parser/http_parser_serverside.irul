@@ -114,8 +114,8 @@ ltm rule http_parser_serverside {
         
         #log local1. "$isRespBodyExist"
         #log local1. "$RESPONSE_BODY"
-        log local1. "$RESP_FIELD_OFFSET_LIST"
-        log local1. "$resp_offset_pointer"
+        #log local1. "$RESP_FIELD_OFFSET_LIST"
+        #log local1. "$resp_offset_pointer"
         
     }
 

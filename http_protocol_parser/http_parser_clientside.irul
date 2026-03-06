@@ -17,6 +17,7 @@ ltm rule /Common/http_parser_clientside {
         set REQ_FIELD_OFFSET_LIST   [list]
 
         TCP::collect
+
     }
 
     when CLIENT_DATA priority 100 {
@@ -108,15 +109,12 @@ ltm rule /Common/http_parser_clientside {
 
         #log local1. "[array get HEADER_MAP]"
 
-
         #log local1. "method: $HTTP_METHOD"
         #log local1. "uri: $URI"
         #log local1. "protocol: $Protocol"
         #log local1. "header: $REQUEST_HEADER"
         #log local1. "body: $REQUEST_BODY"  
         #log local1. "$REQUEST_LINE"
-
-
 
         #TCP::release
         #TCP::collect  
