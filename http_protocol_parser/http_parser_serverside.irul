@@ -1,4 +1,4 @@
-ltm rule http_parser_serverside {
+ltm rule /Common/http_parser_serverside {
     when RULE_INIT priority 100 {
         log local1. "iRule: http_parser_serverside init!"
     }
