@@ -1,4 +1,4 @@
-# How to test these iRules
+# How to make these iRules take effect
 
 ## Configuration on Virtual Server
 

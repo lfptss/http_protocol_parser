@@ -1,6 +1,6 @@
-ltm rule /Common/testRule {
+ltm rule /Common/functionRule {
     when RULE_INIT priority 500 {
-        log local1. "iRule: testRule init!"
+        log local1. "iRule: functionRule init!"
     }
 
 
@@ -9,7 +9,7 @@ ltm rule /Common/testRule {
         # create data group "http_profile_testDG" Type:"String"
         # insert String Record : "Insert_X-Forwarded-For :=1"
 
-        #--------------------Insert X-Forwarded-For-------------------------------
+        # --------------------Insert X-Forwarded-For------------------------------
 
         if { [class match -value -- "Insert_X-Forwarded-For" equals http_profile_testDG] } {
 
@@ -40,7 +40,7 @@ ltm rule /Common/testRule {
 
         }
 
-        #-------------------------------------------------------------------------
+        # ------------------------------------------------------------------------
         #TCP::payload replace 0 3 "POST"
 
         #TCP::payload replace 4 1 ""
@@ -52,4 +52,9 @@ ltm rule /Common/testRule {
 
 
     }
+
+    when SERVER_DATA priority 500 {
+    
+    }
+
 }

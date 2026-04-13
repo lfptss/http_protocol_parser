@@ -61,9 +61,9 @@ ltm rule http_parser_serverside {
         lappend RESP_FIELD_OFFSET_LIST [ list "reason_phrase" , $resp_offset_pointer , [string bytelength $REASON_PHRASE] ]
         incr resp_offset_pointer [ expr { [string bytelength $REASON_PHRASE] + 2 }]
 
-        #-------------------------------------------------------------------------
+        # ------------------------------------------------------------------------
 
-        # -------------------get and parse response header-------------------------
+        # -------------------get and parse response header------------------------
 
         # get response header
         for {set i 1} {$i < [expr {[llength $resp_lines]}] } {incr i} {
@@ -82,9 +82,9 @@ ltm rule http_parser_serverside {
             #log local1. "offset : $resp_offset_pointer"
         }
 
-        #-------------------------------------------------------------------------
+        # ------------------------------------------------------------------------
 
-        # -------------------get and parse response body---------------------------
+        # -------------------get and parse response body--------------------------
 
         if { $isRespBodyExist } {
             incr resp_offset_pointer 2
@@ -104,7 +104,7 @@ ltm rule http_parser_serverside {
             }
         } else { incr resp_offset_pointer 2 }
 
-        #-------------------------------------------------------------------------
+        # ------------------------------------------------------------------------
 
         #log local1. "status line: $STATUS_LINE"
         #log local1. "version: $SERVER_VERSION"

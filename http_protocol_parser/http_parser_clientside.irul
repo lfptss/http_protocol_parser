@@ -68,7 +68,7 @@ ltm rule /Common/http_parser_clientside {
             incr req_offset_pointer [ expr { [string bytelength $CLIENT_VERSION] + 2 }]
         }
 
-        #-------------------------------------------------------------------------
+        # ------------------------------------------------------------------------
 
         # -------------------get and parse request header-------------------------
 
@@ -91,7 +91,7 @@ ltm rule /Common/http_parser_clientside {
 
         #array set HEADER_MAP [array get header]
 
-        #-------------------------------------------------------------------------
+        # ------------------------------------------------------------------------
 
         # -------------------get and parse request body---------------------------
 
@@ -105,7 +105,7 @@ ltm rule /Common/http_parser_clientside {
         #log local1. "offset : $req_offset_pointer"
         #log local1. "$FIELD_OFFSET_LIST"
 
-        #-------------------------------------------------------------------------
+        # ------------------------------------------------------------------------
 
         #log local1. "[array get HEADER_MAP]"
 
